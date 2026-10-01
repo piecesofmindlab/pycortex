@@ -125,9 +125,7 @@ var dataset = (function(module) {
         // $.when's combined progress event doesn't say which source fired.
         // That ordering bug caused setData → active.set() to dispatch
         // verts/textures for a sibling that hadn't pushed yet.
-        var children = this.data.slice();
-        if (this.alphaData !== null)
-            children.push(this.alphaData);
+        var children = this._streamed();
         var allready = [];
         for (var i = 0; i < children.length; i++) {
             allready.push(false);
@@ -301,11 +299,19 @@ var dataset = (function(module) {
         // Optional alpha map (volumes): bind the alpha textures for this
         // frame and the next. A single-frame alpha is reused for every frame
         // of a movie (both slots point at the same texture).
+        // A streamed alpha movie's textures array is sparse until every frame
+        // arrives: keep the bound textures until this frame's is in, and
+        // blend into this frame rather than a missing next one (as
+        // VolumeData.set does for the data itself).
         var alpha = this.alphaData;
         if (alpha !== null && !this.vertex && alpha.textures.length > 0) {
             var at = alpha.textures;
-            this.uniforms.dataalpha.value[0] = at[fframe.mod(at.length)];
-            this.uniforms.dataalpha.value[1] = at[(fframe+1).mod(at.length)];
+            var atex = at[fframe.mod(at.length)];
+            if (atex !== undefined) {
+                var anext = at[(fframe+1).mod(at.length)];
+                this.uniforms.dataalpha.value[0] = atex;
+                this.uniforms.dataalpha.value[1] = anext !== undefined ? anext : atex;
+            }
         }
         // Vertex data: build the single shared "nanmask" attribute, which the
         // shader multiplies into the color. It is 0 wherever any dim (or the
@@ -372,10 +378,25 @@ var dataset = (function(module) {
             this.dispatchEvent({type: "frameloaded", frame: frameIdx});
         }
     };
+    // The data and, when there is one, the alpha map: both stream their
+    // movie frames, so both follow loadRest and setPriority.
+    module.DataView.prototype._streamed = function() {
+        var children = this.data.slice();
+        if (this.alphaData !== null)
+            children.push(this.alphaData);
+        return children;
+    };
     module.DataView.prototype.loadRest = function() {
-        for (var i = 0; i < this.data.length; i++)
-            if (this.data[i].loadRest)
-                this.data[i].loadRest();
+        var children = this._streamed();
+        for (var i = 0; i < children.length; i++)
+            if (children[i].loadRest)
+                children[i].loadRest();
+    };
+    module.DataView.prototype.setPriority = function(frame) {
+        var children = this._streamed();
+        for (var i = 0; i < children.length; i++)
+            if (children[i].setPriority)
+                children[i].setPriority(frame);
     };
     module.DataView.prototype.setFilter = function(interp) {
         this.filter = interp;

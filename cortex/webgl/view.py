@@ -440,7 +440,11 @@ def show(
     package = None
     metadata: dict[str, Any] = {}
     images: dict[str, list] = dict()
-    subjects: list[str] = []
+    # Known before packaging: only each brain's subject is read, not its data,
+    # so code that runs before _prepare() (e.g. viewopts) can use it. It is
+    # the subject set Package collects.
+    subjects: list[str] = list({brain.subject
+                                for brain in data.uniques(collapse=True)})
     ctms: dict[str, str] = dict()
     subjectjs = ""
     _ready = threading.Event()
@@ -461,7 +465,7 @@ def show(
                 raise web.HTTPError(503, reason="The viewer failed to start")
 
     def _prepare():
-        nonlocal package, metadata, subjects, subjectjs
+        nonlocal package, metadata, subjectjs
         db.auxfile = data
 
         #Extract the list of stimuli, for special-casing
@@ -472,7 +476,6 @@ def show(
 
         package = Package(data, lazy=True)
         metadata = package.metadata()
-        subjects = list(package.subjects)
 
         ctmargs = dict(method='mg2', level=9, recache=recache,
             external_svg=overlay_file, overlays_available=overlays_available)

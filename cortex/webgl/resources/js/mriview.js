@@ -1110,9 +1110,7 @@ var mriview = (function(module) {
 
     // Jump the brain to one timepoint
     module.Viewer.prototype.seekFrame = function(dataIdx) {
-        for (var i = 0; i < this.active.data.length; i++)
-            if (this.active.data[i].setPriority)
-                this.active.data[i].setPriority(dataIdx);
+        this.active.setPriority(dataIdx);
         if (this.tsplot && this.tsplot_visible)
             this.tsplot.setFrame(dataIdx);
         if (!this.active.data[0].movie)
